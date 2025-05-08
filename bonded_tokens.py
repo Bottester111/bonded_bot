@@ -69,7 +69,7 @@ def check_new_bonds():
         try:
             address = token.get("pairAddress")
             market_cap = float(token.get("fdv", 0))
-            if address not in posted_tokens and market_cap >= 46000:
+            if address not in posted_tokens and market_cap >= 10000:
                 message = format_token_message(token)
                 bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
                 posted_tokens.add(address)
