@@ -9,13 +9,13 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-print("🔧 Bonded bot is starting...")
+print("\u2699\ufe0f Bonded bot is starting...")
 
 posted_tokens = set()
 
 def get_token_data():
     try:
-        response = requests.get("https://api.dexscreener.com/latest/dex/pairs/abstract")
+        response = requests.get("https://api.dexscreener.com/latest/dex/pairs/moonshot-abstract")
         if response.status_code == 200:
             return response.json().get("pairs", [])
         return []
@@ -33,7 +33,7 @@ def format_token_message(token):
     volume = token.get("volume", {}).get("h24", "N/A")
     created_at = token.get("pairCreatedAt", None)
     ds_link = f"https://dexscreener.com/abstract/{address}"
-    
+
     # Time since launch
     try:
         minutes_since_launch = int((time.time() - created_at) / 60)
@@ -47,19 +47,19 @@ def format_token_message(token):
         buy_tax = tax_data.get("buyTax", 0)
         sell_tax = tax_data.get("sellTax", 0)
         if buy_tax > 10 or sell_tax > 10:
-            tax_warning = f"\n⚠️ Tax Alert: Buy {buy_tax}%, Sell {sell_tax}%"
+            tax_warning = f"\n\u26a0\ufe0f Tax Alert: Buy {buy_tax}%, Sell {sell_tax}%"
     except:
         pass
 
-    return f"""🚀 ${symbol} Bonded
+    return f"""\ud83d\ude80 ${symbol} Bonded
 • Name: {name}
 • CA: {address}
-• 🔗 DS - ({ds_link})
-• 💸 Price: ${price}
-• 💰 FDV: ${market_cap}
-• 💵 Liquidity: ${liquidity}
-• ⏳ Pair Age: {age}
-• 📊 Volume (24h): ${volume}{tax_warning}
+• \ud83d\udd17 DS - ({ds_link})
+• \ud83d\udcb8 Price: ${price}
+• \ud83d\udcb0 FDV: ${market_cap}
+• \ud83d\udcb5 Liquidity: ${liquidity}
+• \u23f3 Pair Age: {age}
+• \ud83d\udcca Volume (24h): ${volume}{tax_warning}
 """
 
 def check_new_bonds():
