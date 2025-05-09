@@ -8,6 +8,10 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
+try:
+    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text="✅ Bot started and ready to send alerts!")
+except Exception as e:
+    print(f"❌ Failed to send Telegram startup message: {e}")
 
 print("🔧 Bonded bot is starting...")
 
