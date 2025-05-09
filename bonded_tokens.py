@@ -13,19 +13,23 @@ print("🔧 Bonded bot is starting...")
 
 posted_tokens = set()
 
-MOONSHOT_API_URL = "https://api.dexscreener.com/latest/dex/pairs/moonshot-abstract"
-
-
 def get_token_data():
     try:
-        response = requests.get(MOONSHOT_API_URL)
+        response = requests.get("https://api.dexscreener.com/latest/dex/search/?q=abstract")
         if response.status_code == 200:
-            return response.json().get("pairs", [])
+            all_tokens = response.json().get("pairs", [])
+            moonshot_tokens = [
+                token for token in all_tokens
+                if "moonshot" in token.get("url", "").lower() and token.get("marketCap", 0) >= 5000
+            ]
+            return moonshot_tokens
         return []
     except Exception as e:
         print(f"Error fetching data: {e}")
         return []
-
+    except Exception as e:
+        print(f"Error fetching data: {e}")
+        return []
 
 def format_token_message(token):
     name = token.get("baseToken", {}).get("name", "Unknown")
@@ -37,7 +41,8 @@ def format_token_message(token):
     volume = token.get("volume", {}).get("h24", "N/A")
     created_at = token.get("pairCreatedAt", None)
     ds_link = f"https://dexscreener.com/abstract/{address}"
-
+    
+    # Time since launch
     try:
         minutes_since_launch = int((time.time() - created_at) / 60)
         age = f"{minutes_since_launch // 60}h{minutes_since_launch % 60}m"
@@ -65,7 +70,6 @@ def format_token_message(token):
 • 📊 Volume (24h): ${volume}{tax_warning}
 """
 
-
 def check_new_bonds():
     global posted_tokens
     tokens = get_token_data()
@@ -73,18 +77,13 @@ def check_new_bonds():
         try:
             address = token.get("pairAddress")
             market_cap = float(token.get("fdv", 0))
-
-            if not address:
-                continue  # Skip if no address
-
-            if address not in posted_tokens and market_cap >= 9000:
+            if address not in posted_tokens and market_cap >= 46000:
                 message = format_token_message(token)
                 bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
                 posted_tokens.add(address)
                 print(f"Posted ${token.get('baseToken', {}).get('symbol', '')}")
         except Exception as e:
             print(f"Error processing token: {e}")
-
 
 while True:
     check_new_bonds()
