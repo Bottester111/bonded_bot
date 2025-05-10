@@ -73,12 +73,22 @@ def main():
     latest_block = w3.eth.block_number
 
     try:
-        logs = w3.eth.get_logs({
-            "fromBlock": 0,
-            "toBlock": latest_block,
+        
+    logs = []
+    step = 5000
+    for start in range(0, latest_block, step):
+        end = min(start + step - 1, latest_block)
+        try:
+            chunk_logs = w3.eth.get_logs({
+                "fromBlock": start,
+                "toBlock": end,
+
             "address": FACTORY_ADDRESS,
             "topics": [event_signature]
-        })
+            })
+            logs.extend(chunk_logs)
+        except Exception as chunk_err:
+            print(f"Chunk {start}-{end} failed:", chunk_err)
 
         for log in logs:
             try:
