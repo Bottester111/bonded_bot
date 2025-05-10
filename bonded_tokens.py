@@ -17,7 +17,7 @@ bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
 # ABIs
 FACTORY_ABI = json.loads('[{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"token0","type":"address"},{"indexed":true,"internalType":"address","name":"token1","type":"address"},{"indexed":false,"internalType":"address","name":"pair","type":"address"},{"indexed":false,"internalType":"uint256","name":"","type":"uint256"}],"name":"PairCreated","type":"event"}]')
-PAIR_ABI = json.loads('[{"constant":true,"inputs":[],"name":"getReserves","outputs":[{"name":"_reserve0","type":"uint112"},{"name":"_reserve1","type":"uint112"},{"name":"_blockTimestampLast","type":"uint32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"token0","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"token1","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"}]')
+PAIR_ABI = json.loads('[{"constant":true,"inputs":[],"name":"getReserves","outputs":[{"name":"_reserve0","type":"uint112"},{"name":"_reserve1","type":"uint112"},{"name":"_blockTimestampLast","type":"uint32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"token0","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"token1","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability"...
 TOKEN_ABI = json.loads('[{"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"type":"function"},{"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"type":"function"}]')
 
 factory = w3.eth.contract(address=FACTORY_ADDRESS, abi=FACTORY_ABI)
@@ -72,8 +72,6 @@ def main():
     event_signature = w3.keccak(text="PairCreated(address,address,address,uint256)").hex()
     latest_block = w3.eth.block_number
 
-    try:
-        
     logs = []
     step = 5000
     for start in range(0, latest_block, step):
@@ -82,40 +80,36 @@ def main():
             chunk_logs = w3.eth.get_logs({
                 "fromBlock": start,
                 "toBlock": end,
-
-            "address": FACTORY_ADDRESS,
-            "topics": [event_signature]
+                "address": FACTORY_ADDRESS,
+                "topics": [event_signature]
             })
             logs.extend(chunk_logs)
         except Exception as chunk_err:
             print(f"Chunk {start}-{end} failed:", chunk_err)
 
-        for log in logs:
-            try:
-                data = factory.events.PairCreated().processLog(log)
-                token0 = data.args.token0
-                token1 = data.args.token1
-                pair = data.args.pair
+    for log in logs:
+        try:
+            data = factory.events.PairCreated().processLog(log)
+            token0 = data.args.token0
+            token1 = data.args.token1
+            pair = data.args.pair
 
-                if WETH_ADDRESS.lower() not in [token0.lower(), token1.lower()]:
-                    continue
+            if WETH_ADDRESS.lower() not in [token0.lower(), token1.lower()]:
+                continue
 
-                token = token0 if token1.lower() == WETH_ADDRESS.lower() else token1
-                supply = get_token_details(token)
-                if not supply:
-                    continue
+            token = token0 if token1.lower() == WETH_ADDRESS.lower() else token1
+            supply = get_token_details(token)
+            if not supply:
+                continue
 
-                price = get_token_price_in_weth(pair, token)
-                fdv = supply * price * 2000  # estimate WETH at $2000
+            price = get_token_price_in_weth(pair, token)
+            fdv = supply * price * 2000
 
-                if fdv >= FDV_THRESHOLD:
-                    send_alert(pair, token, fdv, price)
-                    time.sleep(1)  # prevent spam
-            except Exception as inner:
-                print("Token error:", inner)
-
-    except Exception as e:
-        print("Backfill scan error:", e)
+            if fdv >= FDV_THRESHOLD:
+                send_alert(pair, token, fdv, price)
+                time.sleep(1)
+        except Exception as inner:
+            print("Token error:", inner)
 
 if __name__ == "__main__":
     main()
