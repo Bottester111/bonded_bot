@@ -1,7 +1,6 @@
 
 import time
 import json
-import requests
 from web3 import Web3
 from telegram import Bot
 
@@ -11,20 +10,14 @@ FACTORY_ADDRESS = "0x566d7510dEE58360a64C9827257cF6D0Dc43985E"
 WETH_ADDRESS = "0x4200000000000000000000000000000000000006"
 TELEGRAM_BOT_TOKEN = "7681851699:AAH5tosSVfN7jQnaZXj8_hWY7XWsXWjQ0os"
 TELEGRAM_CHAT_ID = "-1002614749658"
-FDV_THRESHOLD = 5000  # FDV threshold for testing  # USD
+FDV_THRESHOLD = 5000
 
-# === INIT ===
 w3 = Web3(Web3.HTTPProvider(RPC_URL))
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
-posted_pairs = set()
 
-# Factory ABI (minimal)
+# ABIs
 FACTORY_ABI = json.loads('[{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"token0","type":"address"},{"indexed":true,"internalType":"address","name":"token1","type":"address"},{"indexed":false,"internalType":"address","name":"pair","type":"address"},{"indexed":false,"internalType":"uint256","name":"","type":"uint256"}],"name":"PairCreated","type":"event"}]')
-
-# Pair ABI (minimal)
-PAIR_ABI = json.loads('[{"constant":true,"inputs":[],"name":"getReserves","outputs":[{"name":"_reserve0","type":"uint112"},{"name":"_reserve1","type":"uint112"},{"name":"_blockTimestampLast","type":"uint32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"token0","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"token1","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"}]')
-
-# Token ABI for totalSupply and decimals
+PAIR_ABI = json.loads('[{"constant":true,"inputs":[],"name":"getReserves","outputs":[{"name":"_reserve0","type":"uint112"},{"name":"_reserve1","type":"uint112"},{"name":"_blockTimestampLast","type":"uint32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"token0","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"token1","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"}]')
 TOKEN_ABI = json.loads('[{"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"type":"function"},{"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"type":"function"}]')
 
 factory = w3.eth.contract(address=FACTORY_ADDRESS, abi=FACTORY_ABI)
@@ -60,7 +53,7 @@ def get_token_price_in_weth(pair_address, token_address):
         return 0
 
 def send_alert(pair_address, token_address, fdv, price):
-    msg = f"""🚀 *New Bonded Token*
+    msg = f"""🧠 *Backfill: Bonded Token Found*
 
 *Pair:* `{pair_address}`
 *Token:* `{token_address}`
@@ -73,57 +66,46 @@ def send_alert(pair_address, token_address, fdv, price):
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=msg, parse_mode="Markdown")
     except Exception as e:
         print("Telegram error:", e)
-        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=msg, parse_mode="Markdown")
-    except Exception as e:
-        print("Telegram error:", e)
 
 def main():
-    print("🛰️ Monitoring Abstract DEX for bonded tokens...")
-    last_block = w3.eth.block_number
-    while True:
-        latest = w3.eth.block_number
-        if latest == last_block:
-            time.sleep(1)
-            continue
+    print("🔁 Starting backfill scan...")
+    event_signature = w3.keccak(text="PairCreated(address,address,address,uint256)").hex()
+    latest_block = w3.eth.block_number
 
-        try:
-            logs = w3.eth.get_logs({
-                "fromBlock": last_block + 1,
-                "toBlock": latest,
-                "address": FACTORY_ADDRESS,
-                "topics": [w3.keccak(text="PairCreated(address,address,address,uint256)").hex()]
-            })
+    try:
+        logs = w3.eth.get_logs({
+            "fromBlock": 0,
+            "toBlock": latest_block,
+            "address": FACTORY_ADDRESS,
+            "topics": [event_signature]
+        })
 
-            for log in logs:
+        for log in logs:
+            try:
                 data = factory.events.PairCreated().processLog(log)
                 token0 = data.args.token0
                 token1 = data.args.token1
                 pair = data.args.pair
 
-                if pair in posted_pairs:
-                    continue
-
                 if WETH_ADDRESS.lower() not in [token0.lower(), token1.lower()]:
                     continue
 
                 token = token0 if token1.lower() == WETH_ADDRESS.lower() else token1
-
                 supply = get_token_details(token)
                 if not supply:
                     continue
 
                 price = get_token_price_in_weth(pair, token)
-                fdv = supply * price * 2000  # Estimate WETH in USD
+                fdv = supply * price * 2000  # estimate WETH at $2000
 
                 if fdv >= FDV_THRESHOLD:
                     send_alert(pair, token, fdv, price)
-                    posted_pairs.add(pair)
+                    time.sleep(1)  # prevent spam
+            except Exception as inner:
+                print("Token error:", inner)
 
-        except Exception as e:
-            print("Scan error:", e)
-
-        last_block = latest
-        time.sleep(1)
+    except Exception as e:
+        print("Backfill scan error:", e)
 
 if __name__ == "__main__":
     main()
