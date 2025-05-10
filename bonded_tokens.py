@@ -60,16 +60,19 @@ def get_token_price_in_weth(pair_address, token_address):
         return 0
 
 def send_alert(pair_address, token_address, fdv, price):
-    msg = f"🚀 *New Bonded Token*
+    msg = f"""🚀 *New Bonded Token*
 
-Pair: `{pair_address}`
-Token: `{token_address}`
-Price: {price:.8f} WETH
-FDV: ${int(fdv):,}
+*Pair:* `{pair_address}`
+*Token:* `{token_address}`
+*Price:* {price:.8f} WETH
+*FDV:* ${int(fdv):,}
 
-[📊 View on AbstractScan](https://abscan.org/address/{token_address})"
+[📊 View on AbstractScan](https://abscan.org/address/{token_address})"""
     print(f"[ALERT] {msg}")
     try:
+        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=msg, parse_mode="Markdown")
+    except Exception as e:
+        print("Telegram error:", e)
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=msg, parse_mode="Markdown")
     except Exception as e:
         print("Telegram error:", e)
