@@ -83,12 +83,12 @@ def get_eth_price_usd():
             return 2000
 
         return reserve_usdc / reserve_weth
-    except:
+    except Exception:
         return 2000
 
         price = oracle.functions.latestAnswer().call()
         return int(price) / 1e8
-    except:
+    except Exception:
         return 2000  # fallback
 
 def send_alert(pair_address, token_address, fdv, price):
