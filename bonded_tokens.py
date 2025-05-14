@@ -1,4 +1,3 @@
-def main():
 
     # Placeholder: this would be your fixed bonded_tokens.py script with manual log decoding
     # You should replace the log decoding section with this snippet:
@@ -10,7 +9,5 @@ def main():
 
 
     if __name__ == '__main__':
-        main()
 
 if __name__ == '__main__':
-    main()
