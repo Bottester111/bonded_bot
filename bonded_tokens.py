@@ -14,7 +14,7 @@ DEXSCREENER_API = "https://api.dexscreener.com/latest/dex/pairs/abstract"
 PAIR_DETAILS_API = "https://api.dexscreener.com/latest/dex/pair/abstract"
 MOONSHOT_FACTORY = "0x0d6848e39114abe69054407452b8aab82f8a44ba"
 FDV_THRESHOLD = 5000
-SCAN_INTERVAL = 5  # seconds
+SCAN_INTERVAL = 1  # seconds
 
 seen = set()
 
