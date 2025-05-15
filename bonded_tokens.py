@@ -18,7 +18,7 @@ def main():
                 fdv = token.get("fdv", 0)
                 url = token.get("url", "")
 
-                if not url.startswith("https://dexscreener.com/moonshot"):
+                if "dexscreener.com/moonshot" not in url:
                     continue
 
                 print(f"- {name} ({symbol}): FDV = ${fdv:,}", end=" ")
