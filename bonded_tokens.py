@@ -74,10 +74,12 @@ def main():
             for token in new_tokens:
                 price = get_token_price(token)
                 if price and price >= PRICE_THRESHOLD:
-                    msg = f"🚨 New Moonshot Token
-📈 *Token:* [{token}]({BASE_URL}/{token})
-💵 *Price:* ${price}
-🔥 *FDV est:* ${price * 1_000_000_000:,.0f}"
+                    msg = (
+    f"🚨 New Moonshot Token\n"
+    f"📈 *Token:* [{token}]({BASE_URL}/{token})\n"
+    f"💵 *Price:* ${price}\n"
+    f"🔥 *FDV est:* ${price * 1_000_000_000:,.0f}"
+)
                     log(msg)
             print(f"Checked {len(new_tokens)} tokens. Sleeping {CHECK_INTERVAL}s...")
             time.sleep(CHECK_INTERVAL)
