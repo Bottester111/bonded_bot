@@ -36,6 +36,7 @@ def fetch_recent_tokens():
     try:
         url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&sort=desc"
         response = requests.get(url)
+        print("[Raw Abscan response]", response.text[:500])  # Always print raw response
         response.raise_for_status()
 
         try:
