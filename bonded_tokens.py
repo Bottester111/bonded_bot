@@ -86,8 +86,10 @@ def main():
         try:
             new_tokens = fetch_recent_tokens()
             for token in new_tokens:
+                print(f"[Scan] Checking token: {token}")
                 price = get_token_price(token)
                 if price and price >= PRICE_THRESHOLD:
+                    print(f"[PASS] {token} passed FDV threshold with price ${price}")
                     msg = (
                         f"🚨 New Moonshot Token\n"
                         f"📈 *Token:* [{token}]({BASE_URL}/{token})\n"
