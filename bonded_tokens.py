@@ -34,7 +34,8 @@ def log(msg):
 
 def fetch_recent_tokens():
     try:
-        url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&sort=desc"
+        ABSCAN_API_KEY = os.getenv("ABSCAN_API_KEY")
+        url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&sort=desc&apikey={ABSCAN_API_KEY}"
         response = requests.get(url)
         print("[Raw Abscan response]", response.text[:500])  # Always print raw response
         response.raise_for_status()
@@ -64,7 +65,8 @@ def fetch_recent_tokens():
         print("[Fetch Token Error]", e)
         return []
     try:
-        url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&sort=desc"
+        ABSCAN_API_KEY = os.getenv("ABSCAN_API_KEY")
+        url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&sort=desc&apikey={ABSCAN_API_KEY}"
         response = requests.get(url)
         response.raise_for_status()
 
