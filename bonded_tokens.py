@@ -37,7 +37,7 @@ def fetch_recent_tokens():
         ABSCAN_API_KEY = os.getenv("ABSCAN_API_KEY")
         # Get latest block
         try:
-            latest_block_res = requests.get("https://api.abscan.org/api?module=proxy&action=eth_blockNumber")
+            latest_block_res = requests.get(f"https://api.abscan.org/api?module=proxy&action=eth_blockNumber&apikey={ABSCAN_API_KEY}")
             latest_block = int(latest_block_res.json().get("result", "0x0"), 16)
             start_block = latest_block - 50
         except Exception as e:
@@ -77,7 +77,7 @@ def fetch_recent_tokens():
         ABSCAN_API_KEY = os.getenv("ABSCAN_API_KEY")
         # Get latest block
         try:
-            latest_block_res = requests.get("https://api.abscan.org/api?module=proxy&action=eth_blockNumber")
+            latest_block_res = requests.get(f"https://api.abscan.org/api?module=proxy&action=eth_blockNumber&apikey={ABSCAN_API_KEY}")
             latest_block = int(latest_block_res.json().get("result", "0x0"), 16)
             start_block = latest_block - 50
         except Exception as e:
