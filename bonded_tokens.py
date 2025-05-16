@@ -9,6 +9,7 @@ import os
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+ABSCAN_API_KEY = os.getenv("ABSCAN_API_KEY")
 
 if not TELEGRAM_TOKEN or " " in TELEGRAM_TOKEN or ":" not in TELEGRAM_TOKEN:
     print("❌ TELEGRAM_BOT_TOKEN is missing or malformed. Please check your Railway variables.")
@@ -17,7 +18,6 @@ if not TELEGRAM_TOKEN or " " in TELEGRAM_TOKEN or ":" not in TELEGRAM_TOKEN:
 bot = Bot(token=TELEGRAM_TOKEN)
 
 MOONSHOT_DEPLOYER = "0x0d6848e39114abe69054407452b8aab82f8a44ba"
-ETHERSCAN_API = os.getenv("ETHERSCAN_API_KEY")
 FDV_THRESHOLD_USD = 4100
 PRICE_THRESHOLD = 0.0000041
 CHECK_INTERVAL = 1  # seconds
@@ -34,19 +34,18 @@ def log(msg):
 
 def fetch_recent_tokens():
     try:
-        ABSCAN_API_KEY = os.getenv("ABSCAN_API_KEY")
-        # Get latest block
+        # Fetch latest block number with API key
         try:
-            latest_block_res = requests.get(f"https://api.abscan.org/api?module=proxy&action=eth_blockNumber&apikey={ABSCAN_API_KEY}")
-            latest_block = int(latest_block_res.json().get("result", "0x0"), 16)
+            block_res = requests.get(f"https://api.abscan.org/api?module=proxy&action=eth_blockNumber&apikey={ABSCAN_API_KEY}")
+            latest_block = int(block_res.json().get("result", "0x0"), 16)
             start_block = latest_block - 50
         except Exception as e:
             print("[Block Fetch Error]", e)
             start_block = 0
 
-        url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&startblock={start_block}&sort=desc&apikey={ABSCAN_API_KEY}"
+        url = f"https://api.abscan.org/api?module=account&action=txlist&address={MOONSHOT_DEPLOYER}&startblock={start_block}&sort=desc&apikey={ABSCAN_API_KEY}"
         response = requests.get(url)
-        print("[Raw Abscan response]", response.text[:500])  # Always print raw response
+        print("[Raw Abscan response]", response.text[:300])
         response.raise_for_status()
 
         try:
@@ -61,41 +60,6 @@ def fetch_recent_tokens():
             print("[Raw Abscan Response]", response.text[:300])
             return []
 
-        new_tokens = []
-
-        for tx in txs:
-            contract = tx.get("contractAddress")
-            if contract and contract not in tracked_tokens:
-                tracked_tokens.add(contract)
-                new_tokens.append(contract)
-
-        return new_tokens
-    except Exception as e:
-        print("[Fetch Token Error]", e)
-        return []
-    try:
-        ABSCAN_API_KEY = os.getenv("ABSCAN_API_KEY")
-        # Get latest block
-        try:
-            latest_block_res = requests.get(f"https://api.abscan.org/api?module=proxy&action=eth_blockNumber&apikey={ABSCAN_API_KEY}")
-            latest_block = int(latest_block_res.json().get("result", "0x0"), 16)
-            start_block = latest_block - 50
-        except Exception as e:
-            print("[Block Fetch Error]", e)
-            start_block = 0
-
-        url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&startblock={start_block}&sort=desc&apikey={ABSCAN_API_KEY}"
-        response = requests.get(url)
-        response.raise_for_status()
-
-        try:
-            data = response.json()
-        except Exception as e:
-            print("[JSON Parse Error]", e)
-            print("[Raw Response]", response.text[:300])
-            return []
-
-        txs = data.get("result", [])
         new_tokens = []
 
         for tx in txs:
@@ -138,15 +102,20 @@ def main():
             for token in new_tokens:
                 print(f"[Scan] Checking token: {token}")
                 price = get_token_price(token)
-                if price and price >= PRICE_THRESHOLD:
-                    print(f"[PASS] {token} passed FDV threshold with price ${price}")
-                    msg = (
-                        f"🚨 New Moonshot Token\n"
-                        f"📈 *Token:* [{token}]({BASE_URL}/{token})\n"
-                        f"💵 *Price:* ${price}\n"
-                        f"🔥 *FDV est:* ${price * 1_000_000_000:,.0f}"
-                    )
-                    log(msg)
+                if price is None:
+                    print(f"[SKIP] No price found for {token}")
+                    continue
+                if price < PRICE_THRESHOLD:
+                    print(f"[SKIP] Price too low (${price}) for {token}")
+                    continue
+                print(f"[PASS] {token} passed FDV threshold with price ${price}")
+                msg = (
+                    f"🚨 New Moonshot Token\n"
+                    f"📈 *Token:* [{token}]({BASE_URL}/{token})\n"
+                    f"💵 *Price:* ${price}\n"
+                    f"🔥 *FDV est:* ${price * 1_000_000_000:,.0f}"
+                )
+                log(msg)
             print(f"Checked {len(new_tokens)} tokens. Sleeping {CHECK_INTERVAL}s...")
             time.sleep(CHECK_INTERVAL)
         except Exception as e:
