@@ -35,7 +35,16 @@ def log(msg):
 def fetch_recent_tokens():
     try:
         ABSCAN_API_KEY = os.getenv("ABSCAN_API_KEY")
-        url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&sort=desc&apikey={ABSCAN_API_KEY}"
+        # Get latest block
+        try:
+            latest_block_res = requests.get("https://api.abscan.org/api?module=proxy&action=eth_blockNumber")
+            latest_block = int(latest_block_res.json().get("result", "0x0"), 16)
+            start_block = latest_block - 50
+        except Exception as e:
+            print("[Block Fetch Error]", e)
+            start_block = 0
+
+        url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&startblock={start_block}&sort=desc&apikey={ABSCAN_API_KEY}"
         response = requests.get(url)
         print("[Raw Abscan response]", response.text[:500])  # Always print raw response
         response.raise_for_status()
@@ -66,7 +75,16 @@ def fetch_recent_tokens():
         return []
     try:
         ABSCAN_API_KEY = os.getenv("ABSCAN_API_KEY")
-        url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&sort=desc&apikey={ABSCAN_API_KEY}"
+        # Get latest block
+        try:
+            latest_block_res = requests.get("https://api.abscan.org/api?module=proxy&action=eth_blockNumber")
+            latest_block = int(latest_block_res.json().get("result", "0x0"), 16)
+            start_block = latest_block - 50
+        except Exception as e:
+            print("[Block Fetch Error]", e)
+            start_block = 0
+
+        url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&startblock={start_block}&sort=desc&apikey={ABSCAN_API_KEY}"
         response = requests.get(url)
         response.raise_for_status()
 
