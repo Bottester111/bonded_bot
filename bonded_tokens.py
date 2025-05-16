@@ -36,6 +36,11 @@ def fetch_recent_tokens():
     try:
         url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&sort=desc"
         response = requests.get(url)
+        content_type = response.headers.get("Content-Type", "")
+        if "application/json" not in content_type:
+            print("[Abscan Error] Unexpected content type:", content_type)
+            print("[Abscan Raw Response]", response.text[:300])
+            return []
         response.raise_for_status()
 
         try:
@@ -45,7 +50,7 @@ def fetch_recent_tokens():
             print("[Raw Response]", response.text[:300])
             return []
 
-        txs = data.get("result", [])
+        txs = data.get("result", []) if isinstance(data, dict) else []
         new_tokens = []
 
         for tx in txs:
