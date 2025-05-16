@@ -1,3 +1,5 @@
+# Required packages:
+# pip install beautifulsoup4 requests python-telegram-bot==13.15
 
 import time
 import requests
@@ -7,12 +9,17 @@ import os
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+if not TELEGRAM_TOKEN or " " in TELEGRAM_TOKEN or ":" not in TELEGRAM_TOKEN:
+    print("❌ TELEGRAM_BOT_TOKEN is missing or malformed. Please check your Railway variables.")
+    exit(1)
+
 bot = Bot(token=TELEGRAM_TOKEN)
 
 MOONSHOT_DEPLOYER = "0x0d6848e39114abe69054407452b8aab82f8a44ba"
 ETHERSCAN_API = os.getenv("ETHERSCAN_API_KEY")
-FDV_THRESHOLD_USD = 4000
-PRICE_THRESHOLD = 0.0000041000
+FDV_THRESHOLD_USD = 4100
+PRICE_THRESHOLD = 0.0000041
 CHECK_INTERVAL = 1  # seconds
 BASE_URL = "https://dexscreener.com/abstract"
 
@@ -21,7 +28,7 @@ tracked_tokens = set()
 def log(msg):
     print(msg)
     try:
-        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=msg)
+        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=msg, parse_mode="Markdown", disable_web_page_preview=True)
     except Exception as e:
         print("[Telegram Error]", e)
 
@@ -30,7 +37,15 @@ def fetch_recent_tokens():
         url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&sort=desc"
         response = requests.get(url)
         response.raise_for_status()
-        txs = response.json().get("result", [])
+
+        try:
+            data = response.json()
+        except Exception as e:
+            print("[JSON Parse Error]", e)
+            print("[Raw Response]", response.text[:300])
+            return []
+
+        txs = data.get("result", [])
         new_tokens = []
 
         for tx in txs:
@@ -54,7 +69,6 @@ def get_token_price(contract_address):
         r.raise_for_status()
 
         soup = BeautifulSoup(r.text, "html.parser")
-        # Dexscreener typically has price in <div>$0.002960</div> for tokens
         price_text = soup.find("div", string=lambda t: t and "$" in t)
         if not price_text:
             return None
@@ -75,11 +89,11 @@ def main():
                 price = get_token_price(token)
                 if price and price >= PRICE_THRESHOLD:
                     msg = (
-    f"🚨 New Moonshot Token\n"
-    f"📈 *Token:* [{token}]({BASE_URL}/{token})\n"
-    f"💵 *Price:* ${price}\n"
-    f"🔥 *FDV est:* ${price * 1_000_000_000:,.0f}"
-)
+                        f"🚨 New Moonshot Token\n"
+                        f"📈 *Token:* [{token}]({BASE_URL}/{token})\n"
+                        f"💵 *Price:* ${price}\n"
+                        f"🔥 *FDV est:* ${price * 1_000_000_000:,.0f}"
+                    )
                     log(msg)
             print(f"Checked {len(new_tokens)} tokens. Sleeping {CHECK_INTERVAL}s...")
             time.sleep(CHECK_INTERVAL)
