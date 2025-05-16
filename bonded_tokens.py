@@ -36,11 +36,35 @@ def fetch_recent_tokens():
     try:
         url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&sort=desc"
         response = requests.get(url)
-        content_type = response.headers.get("Content-Type", "")
-        if "application/json" not in content_type:
-            print("[Abscan Error] Unexpected content type:", content_type)
-            print("[Abscan Raw Response]", response.text[:300])
+        response.raise_for_status()
+
+        try:
+            data = response.json()
+            if not isinstance(data, dict):
+                print("[JSON Type Error] Expected dict, got:", type(data))
+                print("[Raw JSON Response]", repr(data)[:300])
+                return []
+            txs = data.get("result", [])
+        except Exception as e:
+            print("[JSON Parse Error]", e)
+            print("[Raw Abscan Response]", response.text[:300])
             return []
+
+        new_tokens = []
+
+        for tx in txs:
+            contract = tx.get("contractAddress")
+            if contract and contract not in tracked_tokens:
+                tracked_tokens.add(contract)
+                new_tokens.append(contract)
+
+        return new_tokens
+    except Exception as e:
+        print("[Fetch Token Error]", e)
+        return []
+    try:
+        url = f"https://api.abscan.org/api?module=account&action=tokentx&address={MOONSHOT_DEPLOYER}&sort=desc"
+        response = requests.get(url)
         response.raise_for_status()
 
         try:
@@ -50,7 +74,7 @@ def fetch_recent_tokens():
             print("[Raw Response]", response.text[:300])
             return []
 
-        txs = data.get("result", []) if isinstance(data, dict) else []
+        txs = data.get("result", [])
         new_tokens = []
 
         for tx in txs:
