@@ -65,11 +65,11 @@ def fetch_recent_tokens(backfill=False):
 
         for tx in txs:
             if tx.get("from", "").lower() != MOONSHOT_DEPLOYER:
-
+                print(f"[SKIP] Tx not from Moonshot deployer: {tx.get('from')}")
                 continue
             contract = tx.get("contractAddress")
             if not contract:
-
+                print(f"[SKIP] Tx has no contract creation: {tx.get('hash')}")
                 continue
             if contract in tracked_tokens:
                 continue
@@ -86,10 +86,10 @@ def process_tokens(tokens):
         print(f"[Scan] Checking token: {token}")
         price = get_token_price(token)
         if price is None:
-
+            print(f"[SKIP] No price found for {token}")
             continue
         if price < PRICE_THRESHOLD:
-
+            print(f"[SKIP] Price too low (${price}) for {token}")
             continue
         print(f"[PASS] {token} passed FDV threshold with price ${price}")
         msg = (
