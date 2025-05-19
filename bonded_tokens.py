@@ -1,26 +1,10 @@
 
-import aiohttp
-
-TELEGRAM_TOKEN = "7681851699:AAH5tosSVfN7jQnaZXj8_hWY7XWsXWjQ0os"
-TELEGRAM_CHAT_ID = "-1002614749658"
-
-async def send_telegram_alert(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, data=payload) as resp:
-            return await resp.text()
-
-
 import time
 import requests
 from bs4 import BeautifulSoup
 from telegram import Bot
 import os
+import re
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -33,10 +17,8 @@ if not TELEGRAM_TOKEN or " " in TELEGRAM_TOKEN or ":" not in TELEGRAM_TOKEN:
 bot = Bot(token=TELEGRAM_TOKEN)
 
 MOONSHOT_DEPLOYER = "0x0d6848e39114abe69054407452b8aab82f8a44ba"
-FDV_THRESHOLD_USD = 4100
-PRICE_THRESHOLD = 0.0000041
+FDV_THRESHOLD_USD = 4000
 CHECK_INTERVAL = 1  # seconds
-BASE_URL = "https://dexscreener.com/abstract"
 
 tracked_tokens = set()
 
@@ -47,92 +29,51 @@ def log(msg):
     except Exception as e:
         print("[Telegram Error]", e)
 
-def get_token_price(contract_address):
+def get_token_data_from_dexscreener(contract_address):
     try:
-        url = f"{BASE_URL}/{contract_address}"
-        headers = {
-            "User-Agent": "Mozilla/5.0",
-        }
-        r = requests.get(url, headers=headers)
+        url = f"https://api.dexscreener.com/latest/dex/pairs/abstract/{contract_address}"
+        r = requests.get(url, timeout=5)
         r.raise_for_status()
-
-        soup = BeautifulSoup(r.text, "html.parser")
-        price_text = soup.find("div", string=lambda t: t and "$" in t)
-        if not price_text:
+        data = r.json()
+        if 'pair' not in data:
             return None
-
-        price = price_text.text.strip().replace("$", "")
-        return float(price)
-    except Exception as e:
-        print(f"[Dexscreener Price Error] {contract_address}", e)
+        pair_data = data['pair']
+        fdv = float(pair_data.get("fdvUsd") or 0)
+        return fdv
+    except Exception:
         return None
 
-def fetch_recent_tokens(backfill=False):
+def get_new_tokens():
+    url = f"https://api.abscan.io/api?module=account&action=txlist&address={MOONSHOT_DEPLOYER}&sort=desc&apikey={ABSCAN_API_KEY}"
     try:
-        url = f"https://api.abscan.org/api?module=account&action=txlist&address={MOONSHOT_DEPLOYER}&sort=desc&apikey={ABSCAN_API_KEY}"
-        if backfill:
-            url += "&startblock=0"
-
-        response = requests.get(url)
-        print("[Raw Abscan response]", response.text[:300])
-        response.raise_for_status()
-
-        txs = response.json().get("result", [])
+        res = requests.get(url, timeout=5).json()
+        txs = res.get("result", [])
         new_tokens = []
-
         for tx in txs:
-            if tx.get("from", "").lower() != MOONSHOT_DEPLOYER:
-                
-                continue
-            contract = tx.get("contractAddress")
-            if not contract:
-                print(f"[SKIP] Tx has no contract creation: {tx.get('hash')}")
-                continue
-            if contract in tracked_tokens:
-                continue
-            tracked_tokens.add(contract)
-            new_tokens.append(contract)
-
+            input_data = tx.get("input", "")
+            match = re.search(r"0x60.*", input_data)  # matches contract creation calldata
+            if match and tx.get("to") == "":
+                contract = tx.get("contractAddress")
+                if contract and contract not in tracked_tokens:
+                    new_tokens.append(contract)
         return new_tokens
-    except Exception as e:
-        print("[Fetch Token Error]", e)
+    except Exception:
         return []
 
-def process_tokens(tokens):
-    for token in tokens:
-        print(f"[Scan] Checking token: {token}")
-        price = get_token_price(token)
-        if price is None:
-            print(f"[SKIP] No price found for {token}")
-            continue
-        if price < PRICE_THRESHOLD:
-            print(f"[SKIP] Price too low (${price}) for {token}")
-            continue
-        print(f"[PASS] {token} passed FDV threshold with price ${price}")
-        msg = (
-            f"🚨 New Moonshot Token\n"
-            f"📈 *Token:* [{token}]({BASE_URL}/{token})\n"
-            f"💵 *Price:* ${price}\n"
-            f"🔥 *FDV est:* ${price * 1_000_000_000:,.0f}"
-        )
-        log(msg)
-
-def main():
-    log("🟢 Bonded Bot is live...")
-
-    print("[Startup] Running backfill scan for recent tokens...")
-    backfill_tokens = fetch_recent_tokens(backfill=True)
-    process_tokens(backfill_tokens)
-
+def main_loop():
     while True:
-        try:
-            new_tokens = fetch_recent_tokens()
-            process_tokens(new_tokens)
-            print(f"Checked {len(new_tokens)} tokens. Sleeping {CHECK_INTERVAL}s...")
-            time.sleep(CHECK_INTERVAL)
-        except Exception as e:
-            print("[Main Loop Error]", e)
-            time.sleep(CHECK_INTERVAL)
+        new_contracts = get_new_tokens()
+        for contract in new_contracts:
+            tracked_tokens.add(contract)
+
+        for contract in list(tracked_tokens):
+            fdv = get_token_data_from_dexscreener(contract)
+            if fdv is not None and fdv >= FDV_THRESHOLD_USD:
+                log(f"🚀 Token `{contract}` reached *${int(fdv)} FDV*!
+https://dexscreener.com/abstract/{contract}")
+                tracked_tokens.remove(contract)
+        time.sleep(CHECK_INTERVAL)
 
 if __name__ == "__main__":
-    main()
+    print("🟢 Bonded Bot is live...")
+    main_loop()
