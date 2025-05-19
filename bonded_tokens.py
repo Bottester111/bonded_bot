@@ -1,4 +1,21 @@
 
+import aiohttp
+
+TELEGRAM_TOKEN = "7681851699:AAH5tosSVfN7jQnaZXj8_hWY7XWsXWjQ0os"
+TELEGRAM_CHAT_ID = "-1002614749658"
+
+async def send_telegram_alert(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, data=payload) as resp:
+            return await resp.text()
+
+
 import time
 import requests
 from bs4 import BeautifulSoup
@@ -65,7 +82,7 @@ def fetch_recent_tokens(backfill=False):
 
         for tx in txs:
             if tx.get("from", "").lower() != MOONSHOT_DEPLOYER:
-                print(f"[SKIP] Tx not from Moonshot deployer: {tx.get('from')}")
+                
                 continue
             contract = tx.get("contractAddress")
             if not contract:
