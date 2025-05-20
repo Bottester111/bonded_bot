@@ -61,7 +61,7 @@ async def track_tokens():
                         holder_count = await get_holder_count(session, contract)
 
                         message = (
-                            f"🚀 *{name}* just bonded!
+f"🚀 *{name}* just bonded!",
 
 "
                             f"🔹 *Contract:* `{contract}`
