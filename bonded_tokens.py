@@ -1,80 +1,91 @@
 
+import asyncio
+import aiohttp
 import time
-import requests
 from datetime import datetime
-from telegram import Bot
+import os
+import json
 
-# --- CONFIG ---
-FDV_THRESHOLD = 4000
-DEPLOYER_ADDRESS = "0xYOUR_DEPLOYER"
-TOKEN = "7681851699:AAH5tosSVfN7jQnaZXj8_hWY7XWsXWjQ0os"
-CHAT_ID = "-1002614749658"
-SCAN_INTERVAL = 1  # seconds
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-bot = Bot(token=TOKEN)
-seen_alerts = set()
-tracked_tokens = {}
+seen_contracts = set()
+contract_deploy_times = {}
 
-def fetch_deployments():
-    response = requests.get(f"https://api.abscan.io/api?module=account&action=txlist&address={DEPLOYER_ADDRESS}&sort=desc")
-    result = response.json().get("result", [])
-    return [tx for tx in result if tx["to"] == ""]
+async def fetch_json(session, url):
+    async with session.get(url) as response:
+        return await response.json()
 
-def fetch_token_info(contract):
-    try:
-        url = f"https://api.abscan.io/api?module=token&action=tokeninfo&contractaddress={contract}"
-        response = requests.get(url)
-        data = response.json().get("result", {})
-        fdv = float(data.get("fdv", 0))
-        name = data.get("name", "Unknown")
-        holders = data.get("holders", "Unknown")
-        return fdv, name, holders
-    except:
-        return 0, "Unknown", "Unknown"
+async def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    async with aiohttp.ClientSession() as session:
+        await session.post(url, json=payload)
 
-def get_human_timestamp(unix):
-    return datetime.utcfromtimestamp(int(unix)).strftime("%Y-%m-%d %H:%M:%S")
+async def get_token_data(session, contract):
+    abscan_url = f"https://api.abscan.io/api?module=token&action=tokeninfo&contractaddress={contract}"
+    data = await fetch_json(session, abscan_url)
+    return data.get("result", {})
 
-def alert(contract, fdv, name, holders, deployed_time, hit_time):
-    time_to_bond = hit_time - deployed_time
-    msg = (
-        f"🚀 *{name}* just bonded!
+async def get_holder_count(session, contract):
+    url = f"https://api.abscan.io/api?module=token&action=tokenholdercount&contractaddress={contract}"
+    data = await fetch_json(session, url)
+    return int(data.get("result", 0))
+
+async def track_tokens():
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                url = "https://api.abscan.io/api?module=token&action=recenttokens"
+                data = await fetch_json(session, url)
+
+                for entry in data.get("result", []):
+                    contract = entry.get("contractAddress")
+                    fdv = float(entry.get("fdv", 0))
+                    name = entry.get("name", "Unknown")
+                    deploy_time_unix = int(entry.get("timeStamp", time.time()))
+                    deployed_time = datetime.utcfromtimestamp(deploy_time_unix).strftime('%Y-%m-%d %H:%M:%S UTC')
+                    bond_time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+
+                    if contract in seen_contracts:
+                        continue
+
+                    if fdv >= 4000:
+                        seen_contracts.add(contract)
+
+                        time_to_bond = str(datetime.utcnow() - datetime.utcfromtimestamp(deploy_time_unix)).split('.')[0]
+                        holder_count = await get_holder_count(session, contract)
+
+                        message = (
+                            f"🚀 *{name}* just bonded!
 
 "
-        f"*Contract:* `{contract}`
+                            f"🔹 *Contract:* `{contract}`
 "
-        f"*FDV:* ${int(fdv):,}
+                            f"🔹 *FDV:* ${int(fdv):,}
 "
-        f"*Holders:* {holders}
+                            f"🔹 *Holders:* {holder_count}
 "
-        f"*Deployed:* {deployed_time.strftime('%Y-%m-%d %H:%M:%S')}
+                            f"🔹 *Deployed:* {deployed_time}
 "
-        f"*Hit FDV:* {hit_time.strftime('%Y-%m-%d %H:%M:%S')}
+                            f"🔹 *Bonded:* {bond_time}
 "
-        f"*Time to Bond:* {str(time_to_bond)}
-"
-        f"[View on Abscan](https://abscan.org/token/{contract})"
-    )
-    bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode="Markdown")
+                            f"⏱️ *Time to Bond:* {time_to_bond}
 
-while True:
-    try:
-        txs = fetch_deployments()
-        for tx in txs:
-            contract = tx["contractAddress"] if "contractAddress" in tx else tx["hash"]
-            if contract not in tracked_tokens:
-                tracked_tokens[contract] = int(tx["timeStamp"])
+"
+                            f"📎 [View on Abscan](https://abscan.org/token/{contract})"
+                        )
 
-        now = datetime.utcnow()
-        for contract, deploy_ts in tracked_tokens.items():
-            if contract in seen_alerts:
-                continue
-            fdv, name, holders = fetch_token_info(contract)
-            if fdv >= FDV_THRESHOLD:
-                deployed_time = datetime.utcfromtimestamp(deploy_ts)
-                alert(contract, fdv, name, holders, deployed_time, now)
-                seen_alerts.add(contract)
-        time.sleep(SCAN_INTERVAL)
-    except Exception as e:
-        print(f"[ERROR] {e}")
-        time.sleep(5)
+                        await send_telegram_message(message)
+
+            except Exception as e:
+                print(f"Error: {e}")
+
+            await asyncio.sleep(1)
+
+if __name__ == "__main__":
+    asyncio.run(track_tokens())
