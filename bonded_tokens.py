@@ -3,7 +3,6 @@ import time
 import requests
 import logging
 from web3 import Web3
-from web3.middleware import geth_poa_middleware
 from telegram import Bot
 from datetime import datetime
 
@@ -20,7 +19,6 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(m
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 w3 = Web3(Web3.HTTPProvider(RPC_URL))
-w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 FACTORY_ADDRESS = Web3.to_checksum_address(FACTORY_RAW)
 
 factory_abi = [{
