@@ -3,6 +3,7 @@ import time
 import requests
 import logging
 from web3 import Web3
+from web3.middleware import geth_poa_middleware
 from telegram import Bot
 from datetime import datetime
 
@@ -19,9 +20,10 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(m
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 w3 = Web3(Web3.HTTPProvider(RPC_URL))
+w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 FACTORY_ADDRESS = Web3.to_checksum_address(FACTORY_RAW)
 
-factory = w3.eth.contract(address=FACTORY_ADDRESS, abi=[{
+factory_abi = [{
     "anonymous": False,
     "inputs": [
         {"indexed": True, "internalType": "address", "name": "token0", "type": "address"},
@@ -30,7 +32,10 @@ factory = w3.eth.contract(address=FACTORY_ADDRESS, abi=[{
     ],
     "name": "PairCreated",
     "type": "event"
-}])
+}]
+
+factory = w3.eth.contract(address=FACTORY_ADDRESS, abi=factory_abi)
+pair_created_event = factory.events.PairCreated()
 
 seen_pairs = {}
 alerted_pairs = set()
@@ -54,9 +59,16 @@ def send_alert(name, contract, fdv, deployed_time):
 def fetch_new_pairs():
     global last_block
     current_block = w3.eth.block_number
-    events = factory.events.PairCreated().get_logs(fromBlock=last_block + 1, toBlock=current_block)
-    for event in events:
-        pair_address = event["args"]["pair"]
+    logs = w3.eth.get_logs({
+        "fromBlock": last_block + 1,
+        "toBlock": current_block,
+        "address": FACTORY_ADDRESS,
+        "topics": [pair_created_event._get_event_topic()]
+    })
+
+    for log in logs:
+        decoded = pair_created_event().process_log(log)
+        pair_address = decoded["args"]["pair"]
         if pair_address not in seen_pairs:
             seen_pairs[pair_address] = int(time.time())  # Store deployment time
             logging.info(f"👀 New pair detected: {pair_address}")
