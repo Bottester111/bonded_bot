@@ -41,6 +41,13 @@ alerted_pairs = set()
 warned_pairs = set()
 last_block = w3.eth.block_number
 
+def send_log(message):
+    logging.info(message)
+    try:
+        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+    except Exception as e:
+        logging.warning(f"Failed to send log to Telegram: {e}")
+
 def send_alert(name, contract, fdv, deployed_time):
     message = (
         f"🚀 *{name}* just bonded!\n"
@@ -51,9 +58,7 @@ def send_alert(name, contract, fdv, deployed_time):
         f"*Time to Bond:* {int((time.time() - deployed_time) // 60)}m {int((time.time() - deployed_time) % 60)}s\n"
         f"[View on Dexscreener](https://dexscreener.com/abstract/{contract})"
     )
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
-    requests.post(url, data=payload)
+    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode="Markdown")
     logging.info(f"🚨 Telegram alert sent for {name} at FDV ${fdv:,}")
 
 def fetch_new_pairs():
@@ -72,7 +77,7 @@ def fetch_new_pairs():
         pair_address = decoded["args"]["pair"]
         if pair_address not in seen_pairs:
             seen_pairs[pair_address] = int(time.time())  # Store deployment time
-            logging.info(f"🧪 New token detected: {pair_address} at block {current_block}")
+            send_log(f"🧪 New token detected: {pair_address} at block {current_block}")
     last_block = current_block
 
 def check_all_pairs():
@@ -89,25 +94,25 @@ def check_all_pairs():
                     fdv = price * 1_000_000_000
                     name = data.get("baseToken", {}).get("symbol", "UnknownToken")
                     if fdv >= FDV_WARNING and pair_address not in warned_pairs:
-                        logging.info(f"⚠️ {name} nearing bond level: FDV ${fdv:,.2f}")
+                        send_log(f"⚠️ {name} nearing bond level: FDV ${fdv:,.2f}")
                         warned_pairs.add(pair_address)
                     if fdv >= FDV_THRESHOLD:
                         send_alert(name, pair_address, fdv, deployed_time)
                         alerted_pairs.add(pair_address)
                     else:
-                        logging.info(f"📉 {name} tracked at FDV ${fdv:,.2f}")
+                        send_log(f"📉 {name} tracked at FDV ${fdv:,.2f}")
         except Exception as e:
-            logging.warning(f"⚠️ Error checking {pair_address}: {e}")
+            send_log(f"⚠️ Error checking {pair_address}: {e}")
 
 def monitor():
-    logging.info("✅ Bonded bot is live and watching for new tokens...")
+    send_log("✅ Bonded bot is live and watching for new tokens...")
     while True:
         try:
             fetch_new_pairs()
             check_all_pairs()
             time.sleep(SCAN_INTERVAL)
         except Exception as e:
-            logging.error(f"🛑 Error in monitor loop: {e}")
+            send_log(f"🛑 Error in monitor loop: {e}")
             time.sleep(5)
 
 if __name__ == "__main__":
