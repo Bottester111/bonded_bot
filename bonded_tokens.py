@@ -52,7 +52,7 @@ def send_alert(name, contract, fdv, deployed_time):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
     requests.post(url, data=payload)
-    logging.info(f"🚨 Alert sent for {name} at FDV ${fdv:,}")
+    logging.info(f"🚨 Telegram alert sent for {name} at FDV ${fdv:,}")
 
 def fetch_new_pairs():
     global last_block
@@ -70,7 +70,7 @@ def fetch_new_pairs():
         pair_address = decoded["args"]["pair"]
         if pair_address not in seen_pairs:
             seen_pairs[pair_address] = int(time.time())  # Store deployment time
-            logging.info(f"👀 New pair detected: {pair_address}")
+            logging.info(f"🧪 New token created: {pair_address} at block {current_block}")
     last_block = current_block
 
 def check_all_pairs():
@@ -85,6 +85,7 @@ def check_all_pairs():
                 if "priceUsd" in data and data["priceUsd"]:
                     price = float(data["priceUsd"])
                     fdv = price * 1_000_000_000
+                    logging.info(f"📊 Checking {pair_address} — FDV: ${fdv:,.2f}")
                     if fdv >= FDV_THRESHOLD:
                         name = data.get("baseToken", {}).get("symbol", "UnknownToken")
                         send_alert(name, pair_address, fdv, deployed_time)
