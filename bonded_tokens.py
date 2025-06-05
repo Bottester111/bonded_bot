@@ -57,11 +57,12 @@ def send_alert(name, contract, fdv, deployed_time):
 def fetch_new_pairs():
     global last_block
     current_block = w3.eth.block_number
+    topic_hash = w3.keccak(text="PairCreated(address,address,address)").hex()
     logs = w3.eth.get_logs({
         "fromBlock": last_block + 1,
         "toBlock": current_block,
         "address": FACTORY_ADDRESS,
-        "topics": [pair_created_event._get_event_topic()]
+        "topics": [topic_hash]
     })
 
     for log in logs:
