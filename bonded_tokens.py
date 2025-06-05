@@ -10,36 +10,21 @@ from datetime import datetime
 TELEGRAM_BOT_TOKEN = '7681851699:AAH5tosSVfN7jQnaZXj8_hWY7XWsXWjQ0os'
 TELEGRAM_CHAT_ID = '-1002614749658'
 RPC_URL = "https://api.mainnet.abs.xyz"
-FACTORY_RAW = "0x59fc79d625380f803a1fc5028fc3dc7c8b3c3f1e"
+FACTORY_ADDRESS = Web3.to_checksum_address("0x59fc79d625380f803a1fc5028fc3dc7c8b3c3f1e")
 FDV_THRESHOLD = 5000
 FDV_WARNING = 4000
-SCAN_INTERVAL = 1  # seconds
+SCAN_INTERVAL = 1
 
 # === Setup ===
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
-
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 w3 = Web3(Web3.HTTPProvider(RPC_URL))
-FACTORY_ADDRESS = Web3.to_checksum_address(FACTORY_RAW)
 
-factory_abi = [{
-    "anonymous": False,
-    "inputs": [
-        {"indexed": True, "internalType": "address", "name": "token0", "type": "address"},
-        {"indexed": True, "internalType": "address", "name": "token1", "type": "address"},
-        {"indexed": False, "internalType": "address", "name": "pair", "type": "address"}
-    ],
-    "name": "PairCreated",
-    "type": "event"
-}]
-
-factory = w3.eth.contract(address=FACTORY_ADDRESS, abi=factory_abi)
-pair_created_event = factory.events.PairCreated()
-
+pair_created_topic = w3.keccak(text="PairCreated(address,address,address)").hex()
 seen_pairs = {}
 alerted_pairs = set()
 warned_pairs = set()
-last_block = w3.eth.block_number
+last_checked_block = w3.eth.block_number
 
 def send_log(message):
     logging.info(message)
@@ -61,26 +46,26 @@ def send_alert(name, contract, fdv, deployed_time):
     bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode="Markdown")
     logging.info(f"🚨 Telegram alert sent for {name} at FDV ${fdv:,}")
 
-def fetch_new_pairs():
-    global last_block
-    current_block = w3.eth.block_number
-    topic_hash = w3.keccak(text="PairCreated(address,address,address)").hex()
+def detect_new_pairs():
+    global last_checked_block
+    latest_block = w3.eth.block_number
+
     logs = w3.eth.get_logs({
-        "fromBlock": last_block + 1,
-        "toBlock": current_block,
+        "fromBlock": last_checked_block + 1,
+        "toBlock": latest_block,
         "address": FACTORY_ADDRESS,
-        "topics": [topic_hash]
+        "topics": [pair_created_topic]
     })
 
     for log in logs:
-        decoded = pair_created_event().process_log(log)
-        pair_address = decoded["args"]["pair"]
+        pair_address = "0x" + log["data"][-40:]
         if pair_address not in seen_pairs:
-            seen_pairs[pair_address] = int(time.time())  # Store deployment time
-            send_log(f"🧪 New token detected: {pair_address} at block {current_block}")
-    last_block = current_block
+            seen_pairs[pair_address] = int(time.time())
+            send_log(f"🧪 New token detected: {pair_address} in block {latest_block}")
 
-def check_all_pairs():
+    last_checked_block = latest_block
+
+def check_fdv():
     for pair_address, deployed_time in seen_pairs.items():
         if pair_address in alerted_pairs:
             continue
@@ -105,11 +90,11 @@ def check_all_pairs():
             send_log(f"⚠️ Error checking {pair_address}: {e}")
 
 def monitor():
-    send_log("✅ Bonded bot is live and watching for new tokens...")
+    send_log("✅ Bonded bot is live and scanning for real new tokens...")
     while True:
         try:
-            fetch_new_pairs()
-            check_all_pairs()
+            detect_new_pairs()
+            check_fdv()
             time.sleep(SCAN_INTERVAL)
         except Exception as e:
             send_log(f"🛑 Error in monitor loop: {e}")
