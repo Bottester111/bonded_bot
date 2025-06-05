@@ -21,6 +21,8 @@ bot = Bot(token=TELEGRAM_BOT_TOKEN)
 w3 = Web3(Web3.HTTPProvider(RPC_URL))
 
 FACTORY_ADDRESS = Web3.to_checksum_address(FACTORY_RAW)
+pair_created_topic = w3.keccak(text="PairCreated(address,address,address)").hex()
+
 factory = w3.eth.contract(address=FACTORY_ADDRESS, abi=[{
     "anonymous": False,
     "inputs": [
@@ -58,19 +60,26 @@ def send_alert(name, contract, fdv, deployed_time):
 
 def monitor():
     global last_block
-    send_log("✅ Bonded bot using get_logs() is live and scanning...")
+    send_log("✅ Bonded bot is patched to use w3.eth.get_logs() and is now live...")
 
     while True:
         try:
             current_block = w3.eth.block_number
-            events = factory.events.PairCreated().get_logs(fromBlock=last_block + 1, toBlock=current_block)
-            logging.info(f"🔍 Scanning {last_block + 1} to {current_block} - {len(events)} new pairs")
+            logs = w3.eth.get_logs({
+                "fromBlock": last_block + 1,
+                "toBlock": current_block,
+                "address": FACTORY_ADDRESS,
+                "topics": [pair_created_topic]
+            })
 
-            for event in events:
-                pair = event["args"]["pair"]
+            logging.info(f"🔍 Scanning blocks {last_block + 1} → {current_block}, found {len(logs)} logs")
+
+            for log in logs:
+                decoded = factory.events.PairCreated().process_log(log)
+                pair = decoded["args"]["pair"]
                 if pair not in seen_pairs:
                     seen_pairs[pair] = int(time.time())
-                    send_log(f"🧪 New pair created: {pair}")
+                    send_log(f"🧪 New pair detected: {pair}")
 
             for pair_address, deployed_time in seen_pairs.items():
                 if pair_address in alerted_pairs:
@@ -91,15 +100,15 @@ def monitor():
                                 send_alert(name, pair_address, fdv, deployed_time)
                                 alerted_pairs.add(pair_address)
                             else:
-                                logging.info(f"📉 {name} FDV check: ${fdv:,.2f}")
+                                logging.info(f"📉 {name} FDV: ${fdv:,.2f}")
                 except Exception as e:
-                    logging.warning(f"Error fetching {pair_address}: {e}")
+                    logging.warning(f"Error checking FDV for {pair_address}: {e}")
 
             last_block = current_block
             time.sleep(SCAN_INTERVAL)
 
         except Exception as e:
-            send_log(f"🛑 Error in monitor loop: {e}")
+            send_log(f"🛑 Monitor error: {e}")
             time.sleep(5)
 
 if __name__ == "__main__":
