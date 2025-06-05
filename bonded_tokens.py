@@ -21,20 +21,8 @@ bot = Bot(token=TELEGRAM_BOT_TOKEN)
 w3 = Web3(Web3.HTTPProvider(RPC_URL))
 
 FACTORY_ADDRESS = Web3.to_checksum_address(FACTORY_RAW)
-pair_created_topic = w3.keccak(text="PairCreated(address,address,address)").hex()
 create_fn_sig = w3.keccak(text="createMoonshotTokenAndBuy(...)").hex()[:10]
 create_fn_sig_bytes = bytes.fromhex(create_fn_sig[2:])
-
-factory = w3.eth.contract(address=FACTORY_ADDRESS, abi=[{
-    "anonymous": False,
-    "inputs": [
-        {"indexed": True, "internalType": "address", "name": "token0", "type": "address"},
-        {"indexed": True, "internalType": "address", "name": "token1", "type": "address"},
-        {"indexed": False, "internalType": "address", "name": "pair", "type": "address"}
-    ],
-    "name": "PairCreated",
-    "type": "event"
-}])
 
 seen_pairs = {}
 alerted_pairs = set()
@@ -62,29 +50,11 @@ def send_alert(name, contract, fdv, deployed_time):
 
 def monitor():
     global last_block
-    send_log("✅ Bonded bot is now monitoring new Moonshot tokens AND FDV...")
+    send_log("✅ Bonded bot is now watching Moonshot factory txs and FDV...")
 
     while True:
         try:
             current_block = w3.eth.block_number
-
-            logs = w3.eth.get_logs({
-                "fromBlock": last_block + 1,
-                "toBlock": current_block,
-                "address": FACTORY_ADDRESS,
-                "topics": [pair_created_topic]
-            })
-
-            logging.info(f"🔍 Scanning blocks {last_block + 1} → {current_block}, found {len(logs)} logs")
-
-            for log in logs:
-                decoded = factory.events.PairCreated().process_log(log)
-                pair = decoded["args"]["pair"]
-                if pair not in seen_pairs:
-                    seen_pairs[pair] = int(time.time())
-                    send_log(f"🧪 New pair detected: {pair}")
-
-            # detect direct creation txs (createMoonshotTokenAndBuy)
             for block_num in range(last_block + 1, current_block + 1):
                 block = w3.eth.get_block(block_num, full_transactions=True)
                 for tx in block.transactions:
@@ -94,31 +64,7 @@ def monitor():
                         else:
                             tx_input_bytes = tx.input
                         if tx_input_bytes.startswith(create_fn_sig_bytes):
-                            send_log(f"🆕 Detected CreateMoonshotToken tx:\n🔗 https://abscan.org/tx/{tx.hash.hex()}")
-
-            for pair_address, deployed_time in seen_pairs.items():
-                if pair_address in alerted_pairs:
-                    continue
-                url = f"https://api.dexscreener.com/latest/dex/pairs/abstract/{pair_address}"
-                try:
-                    response = requests.get(url, timeout=5)
-                    if response.status_code == 200:
-                        data = response.json().get("pair", {})
-                        if "priceUsd" in data and data["priceUsd"]:
-                            price = float(data["priceUsd"])
-                            fdv = price * 1_000_000_000
-                            name = data.get("baseToken", {}).get("symbol", "UnknownToken")
-                            if fdv >= FDV_WARNING and pair_address not in warned_pairs:
-                                send_log(f"⚠️ {name} nearing bond level: FDV ${fdv:,.2f}")
-                                warned_pairs.add(pair_address)
-                            if fdv >= FDV_THRESHOLD:
-                                send_alert(name, pair_address, fdv, deployed_time)
-                                alerted_pairs.add(pair_address)
-                            else:
-                                logging.info(f"📉 {name} FDV: ${fdv:,.2f}")
-                except Exception as e:
-                    logging.warning(f"Error checking FDV for {pair_address}: {e}")
-
+                            send_log(f"🆕 Detected Moonshot token creation tx:\n🔗 https://abscan.org/tx/{tx.hash.hex()}")
             last_block = current_block
             time.sleep(SCAN_INTERVAL)
 
