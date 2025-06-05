@@ -23,6 +23,7 @@ w3 = Web3(Web3.HTTPProvider(RPC_URL))
 FACTORY_ADDRESS = Web3.to_checksum_address(FACTORY_RAW)
 pair_created_topic = w3.keccak(text="PairCreated(address,address,address)").hex()
 create_fn_sig = w3.keccak(text="createMoonshotTokenAndBuy(...)").hex()[:10]
+create_fn_sig_bytes = bytes.fromhex(create_fn_sig[2:])
 
 factory = w3.eth.contract(address=FACTORY_ADDRESS, abi=[{
     "anonymous": False,
@@ -87,8 +88,13 @@ def monitor():
             for block_num in range(last_block + 1, current_block + 1):
                 block = w3.eth.get_block(block_num, full_transactions=True)
                 for tx in block.transactions:
-                    if tx.to and tx.to.lower() == FACTORY_ADDRESS.lower() and tx.input.startswith(create_fn_sig):
-                        send_log(f"🆕 Detected CreateMoonshotToken tx:\n🔗 https://abscan.org/tx/{tx.hash.hex()}")
+                    if tx.to and tx.to.lower() == FACTORY_ADDRESS.lower():
+                        if isinstance(tx.input, str):
+                            tx_input_bytes = bytes.fromhex(tx.input[2:])
+                        else:
+                            tx_input_bytes = tx.input
+                        if tx_input_bytes.startswith(create_fn_sig_bytes):
+                            send_log(f"🆕 Detected CreateMoonshotToken tx:\n🔗 https://abscan.org/tx/{tx.hash.hex()}")
 
             for pair_address, deployed_time in seen_pairs.items():
                 if pair_address in alerted_pairs:
