@@ -13,7 +13,7 @@ RPC_URL = "https://api.mainnet.abs.xyz"
 FACTORY_RAW = "0x0D6848e39114abE69054407452b8aaB82f8a44BA"
 FDV_THRESHOLD = 5000
 FDV_WARNING = 4000
-SCAN_INTERVAL = 3  # seconds
+SCAN_INTERVAL = 3
 
 # === Setup ===
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
@@ -22,6 +22,7 @@ w3 = Web3(Web3.HTTPProvider(RPC_URL))
 
 FACTORY_ADDRESS = Web3.to_checksum_address(FACTORY_RAW)
 pair_created_topic = w3.keccak(text="PairCreated(address,address,address)").hex()
+create_fn_sig = w3.keccak(text="createMoonshotTokenAndBuy(...)").hex()[:10]
 
 factory = w3.eth.contract(address=FACTORY_ADDRESS, abi=[{
     "anonymous": False,
@@ -60,11 +61,12 @@ def send_alert(name, contract, fdv, deployed_time):
 
 def monitor():
     global last_block
-    send_log("✅ Bonded bot using correct factory is now live and scanning...")
+    send_log("✅ Bonded bot is now monitoring new Moonshot tokens AND FDV...")
 
     while True:
         try:
             current_block = w3.eth.block_number
+
             logs = w3.eth.get_logs({
                 "fromBlock": last_block + 1,
                 "toBlock": current_block,
@@ -80,6 +82,14 @@ def monitor():
                 if pair not in seen_pairs:
                     seen_pairs[pair] = int(time.time())
                     send_log(f"🧪 New pair detected: {pair}")
+
+            # detect direct creation txs (createMoonshotTokenAndBuy)
+            for block_num in range(last_block + 1, current_block + 1):
+                block = w3.eth.get_block(block_num, full_transactions=True)
+                for tx in block.transactions:
+                    if tx.to and tx.to.lower() == FACTORY_ADDRESS.lower() and tx.input.startswith(create_fn_sig):
+                        send_log(f"🆕 Detected CreateMoonshotToken tx:
+🔗 https://abscan.org/tx/{tx.hash.hex()}")
 
             for pair_address, deployed_time in seen_pairs.items():
                 if pair_address in alerted_pairs:
