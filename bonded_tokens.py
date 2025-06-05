@@ -88,8 +88,7 @@ def monitor():
                 block = w3.eth.get_block(block_num, full_transactions=True)
                 for tx in block.transactions:
                     if tx.to and tx.to.lower() == FACTORY_ADDRESS.lower() and tx.input.startswith(create_fn_sig):
-                        send_log(f"🆕 Detected CreateMoonshotToken tx:
-🔗 https://abscan.org/tx/{tx.hash.hex()}")
+                        send_log(f"🆕 Detected CreateMoonshotToken tx:\n🔗 https://abscan.org/tx/{tx.hash.hex()}")
 
             for pair_address, deployed_time in seen_pairs.items():
                 if pair_address in alerted_pairs:
