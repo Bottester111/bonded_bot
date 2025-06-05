@@ -10,7 +10,7 @@ from datetime import datetime
 TELEGRAM_BOT_TOKEN = '7681851699:AAH5tosSVfN7jQnaZXj8_hWY7XWsXWjQ0os'
 TELEGRAM_CHAT_ID = '-1002614749658'
 RPC_URL = "https://api.mainnet.abs.xyz"
-FACTORY_RAW = "0x59fc79d625380f803a1fc5028fc3dc7c8b3c3f1e"
+FACTORY_RAW = "0x0D6848e39114abE69054407452b8aaB82f8a44BA"
 FDV_THRESHOLD = 5000
 FDV_WARNING = 4000
 SCAN_INTERVAL = 3  # seconds
@@ -60,7 +60,7 @@ def send_alert(name, contract, fdv, deployed_time):
 
 def monitor():
     global last_block
-    send_log("✅ Bonded bot is patched to use w3.eth.get_logs() and is now live...")
+    send_log("✅ Bonded bot using correct factory is now live and scanning...")
 
     while True:
         try:
