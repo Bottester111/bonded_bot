@@ -12,6 +12,7 @@ TELEGRAM_CHAT_ID = '-1002614749658'
 RPC_URL = "https://api.mainnet.abs.xyz"
 FACTORY_RAW = "0x59fc79d625380f803a1fc5028fc3dc7c8b3c3f1e"
 FDV_THRESHOLD = 5000
+FDV_WARNING = 4000
 SCAN_INTERVAL = 1  # seconds
 
 # === Setup ===
@@ -37,6 +38,7 @@ pair_created_event = factory.events.PairCreated()
 
 seen_pairs = {}
 alerted_pairs = set()
+warned_pairs = set()
 last_block = w3.eth.block_number
 
 def send_alert(name, contract, fdv, deployed_time):
@@ -70,7 +72,7 @@ def fetch_new_pairs():
         pair_address = decoded["args"]["pair"]
         if pair_address not in seen_pairs:
             seen_pairs[pair_address] = int(time.time())  # Store deployment time
-            logging.info(f"🧪 New token created: {pair_address} at block {current_block}")
+            logging.info(f"🧪 New token detected: {pair_address} at block {current_block}")
     last_block = current_block
 
 def check_all_pairs():
@@ -85,15 +87,20 @@ def check_all_pairs():
                 if "priceUsd" in data and data["priceUsd"]:
                     price = float(data["priceUsd"])
                     fdv = price * 1_000_000_000
-                    logging.info(f"📊 Checking {pair_address} — FDV: ${fdv:,.2f}")
+                    name = data.get("baseToken", {}).get("symbol", "UnknownToken")
+                    if fdv >= FDV_WARNING and pair_address not in warned_pairs:
+                        logging.info(f"⚠️ {name} nearing bond level: FDV ${fdv:,.2f}")
+                        warned_pairs.add(pair_address)
                     if fdv >= FDV_THRESHOLD:
-                        name = data.get("baseToken", {}).get("symbol", "UnknownToken")
                         send_alert(name, pair_address, fdv, deployed_time)
                         alerted_pairs.add(pair_address)
+                    else:
+                        logging.info(f"📉 {name} tracked at FDV ${fdv:,.2f}")
         except Exception as e:
-            logging.warning(f"⚠️ Error fetching {pair_address}: {e}")
+            logging.warning(f"⚠️ Error checking {pair_address}: {e}")
 
 def monitor():
+    logging.info("✅ Bonded bot is live and watching for new tokens...")
     while True:
         try:
             fetch_new_pairs()
